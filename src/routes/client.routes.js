@@ -62,4 +62,12 @@ router.post("/", createClient);
 
 router.get('/', getAllClients);
 
+
+
+
+
+
+
+
+
 export default router;

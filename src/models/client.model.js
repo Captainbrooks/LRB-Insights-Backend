@@ -7,6 +7,8 @@ const clientSchema = new mongoose.Schema({
     },
     clientEmail:{
         type: String,
+        trim: true,
+        lowercase: true,
         required: true
     },
     industry:{
@@ -18,7 +20,33 @@ const clientSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-
+       platformConnections: {
+      type: [
+        {
+          name: {
+            type: String,
+            enum: [
+              "Google",
+              "Meta",
+              "LinkedIn",
+              "X",
+            ],
+          },
+          status: {
+            type: String,
+            enum: ["Connected", "Pending", "Not Connected"],
+            default: "Not Connected",
+          },
+          connectedAt: { type: Date },
+        },
+      ],
+      default: () => [
+        { name: "Google", status: "Not Connected" },
+        { name: "Meta", status: "Not Connected" },
+        { name: "LinkedIn", status: "Not Connected" },
+        { name: "X", status: "Not Connected" },
+      ],
+    },
     },{timestamps:true}
 );
 

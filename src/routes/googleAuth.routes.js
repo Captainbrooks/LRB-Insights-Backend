@@ -3,6 +3,9 @@ import {google} from "googleapis";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import querystring from "querystring";
+import { sendEmail } from "../utils/email.js";
+import Client from "../models/client.model.js";
 
 dotenv.config();
 
@@ -20,6 +23,27 @@ const oauth2Client = new google.auth.OAuth2(
   
 );
 
+
+
+// google scopes
+
+const scopes = [
+  "https://www.googleapis.com/auth/analytics.readonly",
+  "https://www.googleapis.com/auth/adwords",
+  "https://www.googleapis.com/auth/webmasters.readonly",
+  "https://www.googleapis.com/auth/youtube.readonly",
+  "openid",
+  "email",
+  "profile",
+]
+
+
+
+
+// 
+
+
+
 //step 1: redirect user to Consent Screen
 
 // api/google/auth
@@ -27,13 +51,44 @@ const oauth2Client = new google.auth.OAuth2(
 
 // asking google for permission
 
-router.get("/auth",(req,res)=>{
-    const url=oauth2Client.generateAuthUrl({
+router.get("/auth", async(req,res)=>{
+
+
+  const { clientId } = req.query;
+
+   if(!clientId){
+    return res.status(400).send("clientId query parameter is required");
+  }
+
+  try {
+     const url=oauth2Client.generateAuthUrl({
         access_type:"offline",
-        scope:["https://www.googleapis.com/auth/analytics.readonly"],
-        prompt:"consent"
+        scope:scopes,
+        prompt:"consent",
+        state: JSON.stringify({ clientId }),
     });
-    res.redirect(url)
+
+    const client=await Client.findById(clientId);
+    if(!client){
+        return res.status(404).send("Client not found");
+    }
+
+    await sendEmail(
+      client.clientEmail,
+      "Connect your Google Account to LRB Insights",
+      `<p>Hello ${client.clientName},</p>
+       <p>Click <a href="${url}" target="_blank">here</a> to securely connect your Google account with LRB Insights.</p>
+       <p>This allows your analytics data to sync automatically.</p>`
+    );
+
+    console.log("Google OAuth link sent to:", client.clientEmail);
+    res.json({ success: true, message: "Google OAuth link sent to client email." });
+  } catch (error) {
+    console.error("Error sending Google OAuth link:", error);
+    res.status(500).json({ error: "Failed to send Google OAuth link" });
+  }
+
+ 
 })
 
 
@@ -44,7 +99,9 @@ router.get("/auth",(req,res)=>{
 router.get("/callback",async(req,res)=>{
 
     try {
-        const {code}=req.query;
+        const {code, state}=req.query;
+
+        const { clientId } = JSON.parse(state || '{}' );
 
         // exchange code for tokens
 
@@ -56,7 +113,34 @@ router.get("/callback",async(req,res)=>{
     oauth2Client.setCredentials(tokens);
     // store the tokens in a file
     fs.writeFileSync(tokensPath,JSON.stringify(tokens));
-    res.send("Google Analytics Authentication Successful");
+
+    const client= await Client.findById(clientId);
+    if(!client){
+        return res.status(404).send("Client not found");
+    }
+
+    client.platformConnections = client.platformConnections || [];
+
+    const existingConnection=client.platformConnections.find(conn => conn.name === "Google");
+
+    if(existingConnection){
+        existingConnection.status="Connected";
+        existingConnection.connectedAt=new Date();
+    }else{
+        client.platformConnections.push({
+            name:"Google", 
+            status:"Connected",
+            connectedAt:new Date()
+        });
+    }
+
+    await client.save();
+
+    console.log(`Google account connected for client: ${client.clientName} (${client._id})`);
+
+
+
+    res.send("Google Account connected successfully! You can close this tab.");
     } catch (error) {
 
         console.error("Error during OAuth callback:", error);
