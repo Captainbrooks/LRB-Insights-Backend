@@ -2,6 +2,7 @@ import { Router } from "express";
 import healthRoutes from "./health.routes.js";
 import googleAuthRoutes from "./googleAuth.routes.js";
 import clientRoutes from "./client.routes.js";
+import metaAuthRoutes from "./metaAuth.routes.js"
 
 const router = Router();
 
@@ -9,6 +10,8 @@ const router = Router();
 router.use('/health', healthRoutes);
 
 router.use("/google", googleAuthRoutes);
+
+router.use("/meta", metaAuthRoutes);
 
 router.use('/clients', clientRoutes);
 

@@ -76,7 +76,7 @@ router.get("/auth", async (req, res) => {
 
     const client = await Client.findById(clientId);
     if (!client) {
-      return res.status(404).send("Client not found");
+    return res.status(404).json({error:"Client not found"});
     }
 
     await sendEmail(
@@ -103,116 +103,100 @@ router.get("/auth", async (req, res) => {
 // step 2: Handle Callback
 
 router.get("/callback", async (req, res) => {
-
   try {
     const { code, state } = req.query;
-
-    const { clientId } = JSON.parse(state || '{}');
+    const { clientId } = JSON.parse(state || "{}");
 
     if (!clientId) {
-      return res.status(400).send("clientId is required in state");
+      return res.status(400).send("clientId missing in state");
     }
-
-
 
     const oauth2Client = createOAuthClient();
 
-
-    // exchange code for tokens
-
+    // 1. Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code);
-
-
-    // set the credentials
     oauth2Client.setCredentials(tokens);
 
-
-    // Find client in DB
+    // 2. Fetch client
     const client = await Client.findById(clientId);
     if (!client) return res.status(404).send("Client not found");
 
-
-    // updating the client connection status of the platform
-
+    // 3. Update platformConnections
     client.platformConnections = client.platformConnections || [];
+    const googleConn = client.platformConnections.find((p) => p.name === "Google");
 
-    const existingConnection = client.platformConnections.find(conn => conn.name === "Google")
-
-    if (existingConnection) {
-      existingConnection.status = "Connected";
-      existingConnection.connectedAt = new Date();
+    if (googleConn) {
+      googleConn.status = "Connected";
+      googleConn.connectedAt = new Date();
     } else {
       client.platformConnections.push({
         name: "Google",
         status: "Connected",
-        connectedAt: new Date()
+        connectedAt: new Date(),
       });
     }
 
-
-
-
-
-
-
-
-  // fetch all Google Account IDs
-
-    await client.save();
-
-    // storing the tokens in DB
-
-    const existingToken = await Token.findOne({ clientId: client._id, platform: "Google" });
-
-    if (existingToken) {
-      existingToken.access_token = tokens.access_token;
-      existingToken.refresh_token = tokens.refresh_token || existingToken.refresh_token; // only update if new refresh token is provided
-      existingToken.expiry_date = tokens.expiry_date;
-      await existingToken.save();
-      console.log("Existing token updated for client:", client.clientName);
-    } else {
-
-      await Token.create({
+    // 4. Save or update GOOGLE token
+    await Token.findOneAndUpdate(
+      { clientId: client._id, platform: "Google" },
+      {
         clientId,
         platform: "Google",
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
-        expiry_date: tokens.expiry_date
-      });
+        expiry_date: tokens.expiry_date,
+      },
+      { upsert: true }
+    );
 
-      console.log("New token created for client:", client.clientName);
+    // -----------------------------------------------------
+    // 5. Fetch additional Google resources
+    // -----------------------------------------------------
 
+    // GA4 properties
+    const ga4Props = await fetchGA4Properties(clientId);
+    const selectedGA4 = ga4Props?.[0]?.id || client.googleAccounts?.ga4PropertyId || null;
 
-    }
+    // Google Ads accounts
+    const ads = await fetchGoogleAdsAccounts(clientId);
+    const selectedAds = ads?.[0] || client.googleAccounts?.googleAdsAccounts?.[0] || null;
 
-    console.log(`Google account connected for client: ${client.clientName} (${client._id})`);
+    // Search Console sites
+    const searchSites = await fetchSearchConsoleSites(clientId);
+    const selectedSC = searchSites?.[0]?.url || client.googleAccounts?.searchConsoleSite || null;
 
+    // YouTube channel
+    const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+    const ytRes = await youtube.channels.list({ part: "id,snippet", mine: true });
+    const youtubeChannelId = ytRes.data.items?.[0]?.id || client.googleAccounts?.youtubeChannelId || null;
 
+    // -----------------------------------------------------
+    // 6. Merge googleAccounts safely (NO OVERWRITING)
+    // -----------------------------------------------------
+    client.googleAccounts = {
+      ...client.googleAccounts,
+      ga4PropertyId: selectedGA4,
+      googleAdsAccounts: ads || [],
+      searchConsoleSite: selectedSC,
+      youtubeChannelId: youtubeChannelId,
+    };
 
-    try {
-      const resources = await fetchGoogleResources(clientId);
-      client.googleAccounts = resources;
-      await client.save();
-      console.log("✅ Stored Google resources:", resources);
-    } catch (fetchErr) {
-      console.error("⚠️ Failed to fetch Google resources:", fetchErr.message);
-    }
+    await client.save();
 
-
+    console.log("✔ Google OAuth completed. Resources saved.");
 
     res.send(`
       <h2>✅ Google account connected successfully!</h2>
       <p>Your Google Ads, Analytics, Search Console, and YouTube accounts are now linked.</p>
-      <p>You can close this window and return to the LRB Insights dashboard.</p>
+      <p>You may now close this window.</p>
     `);
-  } catch (error) {
 
-    console.error("Error during OAuth callback:", error);
-    res.status(500).send("❌ Authentication failed. Check console for details.");
-
+  } catch (err) {
+    console.error("Error during OAuth callback:", err);
+    res.status(500).send("❌ Google authentication failed.");
   }
+});
 
-})
 
 
 
