@@ -33,7 +33,7 @@ export const createClient = async (req,res) => {
             <p>Thank you for choosing us to help you with your industry needs. We're excited to have you on board!</p>
             <p>Best regards,<br/>The LRB Insights Team</p>
         `;
-        await sendEmail(clientEmail, subject, html);
+        // await sendEmail(clientEmail, subject, html);
 
         res.status(201).json(newClient);
 
