@@ -374,12 +374,12 @@ export async function fetchGoogleAdsAccounts(clientId) {
     });
 
     const customer = client.Customer({
-      customer_id: process.env.GOOGLE_LOGIN_CUSTOMER_ID, // your MCC
+      customer_id: process.env.GOOGLE_LOGIN_CUSTOMER_ID, 
       login_customer_id: process.env.GOOGLE_LOGIN_CUSTOMER_ID, // same MCC
       refresh_token: token.refresh_token,
     });
 
-    // Lists non-manager accounts (the actual ad accounts you can report on)
+    // Lists non-manager accounts (the actual ad accounts we can report on)
     const query = `
       SELECT
         customer.id,
@@ -395,7 +395,7 @@ export async function fetchGoogleAdsAccounts(clientId) {
     const rows = await customer.query(query);
 
     return rows.map(r => ({
-      id: r.customer.id,                         // ← this is the client customer_id you’ll report on
+      id: r.customer.id,                        
       name: r.customer.descriptive_name || null,
       currency: r.customer.currency_code || null,
       timeZone: r.customer.time_zone || null,
@@ -794,30 +794,27 @@ router.get("/google-ads/test-campaigns/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
 
-    // 1️⃣ Get the token stored for this client
+    //  Get the token stored for this client
     const token = await Token.findOne({ clientId, platform: "Google" });
     if (!token) return res.status(404).json({ error: "No Google token found for this client" });
 
-    // 2️⃣ Initialize the API client
+    //  Initialize the API client
     const api = new GoogleAdsApi({
       client_id: process.env.GOOGLE_CLIENT_ID,
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
       developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN, // test token works here
     });
 
-    // 3️⃣ Choose your test account ID
-    // Pick one of the IDs from your dashboard (remove dashes)
-    // Example: 9116967788 or 7149545621
     const TEST_CUSTOMER_ID = "7149545621";
     
-    // 4️⃣ Build the Ads Customer client
+    //  Build the Ads Customer client
     const customer = api.Customer({
       customer_id: TEST_CUSTOMER_ID,                   // test Ads account
-      login_customer_id: process.env.GOOGLE_LOGIN_CUSTOMER_ID, // your MCC
+      login_customer_id: process.env.GOOGLE_LOGIN_CUSTOMER_ID, 
       refresh_token: token.refresh_token,
     });
 
-    // 5️⃣ Define a test query
+    //  Define a test query
     const query = `
       SELECT
         campaign.id,
@@ -862,7 +859,7 @@ router.get("/google-ads/test-campaigns/:clientId", async (req, res) => {
 
 
 
-// ✅ Fetch performance metrics for a specific Google Ads test account
+//  Fetch performance metrics for a specific Google Ads test account
 router.get("/google-ads/test-metrics/:clientId", async (req, res) => {
   try {
 
