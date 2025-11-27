@@ -947,18 +947,14 @@ router.get("/meta-ad-accounts/:clientId", async(req,res)=>{
         }
       }
     );
-
-    console.log("adaccounts ",response.data)
+    
+    console.log("adaccounts ",response.data.data)
 
     return res.json({
       success: true,
       adAccounts: response.data.adaccounts?.data || []
     });
-
-
-
-        
-        
+  
     } catch (error) {
 
         console.log(error.response?.data || error.message);
@@ -968,7 +964,342 @@ router.get("/meta-ad-accounts/:clientId", async(req,res)=>{
     });
         
     }
-})
+});
+
+
+
+// =======================================================================================================
+
+// fake datas
+
+const mockCampaigns = [
+  {
+    id: "238500100001",
+    name: "Winter Promo Campaign",
+    status: "PAUSED",
+    objective: "TRAFFIC",
+    effective_status: "PAUSED"
+  },
+  {
+    id: "238500100002",
+    name: "Brand Awareness Boost",
+    status: "ACTIVE",
+    objective: "AWARENESS",
+    effective_status: "ACTIVE"
+  }
+];
+
+const mockAdSets = {
+  "238500100001": [
+    {
+      id: "7001",
+      name: "Canada Audience",
+      status: "ACTIVE",
+      daily_budget: 300,
+      start_time: "2025-11-22"
+    },
+    {
+      id: "7002",
+      name: "US Broad Audience",
+      status: "PAUSED",
+      daily_budget: 200,
+      start_time: "2025-11-10"
+    }
+  ],
+
+  "238500100002": [
+    {
+      id: "7003",
+      name: "18-34 Age Group",
+      status: "ACTIVE",
+      daily_budget: 500,
+      start_time: "2025-11-01"
+    }
+  ]
+};
+
+
+const mockAds = {
+  "7001": [
+    {
+      id: "ad_001",
+      name: "Winter Creative 1",
+      status: "ACTIVE",
+      creative_type: "IMAGE",
+      thumbnail: "https://via.placeholder.com/200"
+    },
+    {
+      id: "ad_002",
+      name: "Winter Creative 2",
+      status: "PAUSED",
+      creative_type: "VIDEO",
+      thumbnail: "https://via.placeholder.com/200"
+    }
+  ],
+
+  "7002": [
+    {
+      id: "ad_003",
+      name: "US Market Creative",
+      status: "ACTIVE",
+      creative_type: "IMAGE",
+      thumbnail: "https://via.placeholder.com/200"
+    }
+  ],
+
+  "7003": [
+    {
+      id: "ad_004",
+      name: "Brand Boost Ad",
+      status: "ACTIVE",
+      creative_type: "IMAGE",
+      thumbnail: "https://via.placeholder.com/200"
+    }
+  ]
+};
+
+
+
+const mockAdInsights = {
+  "ad_001": {
+    impressions: 12000,
+    reach: 9000,
+    clicks: 420,
+    spend: 45.20,
+    cpc: 0.11,
+    ctr: 3.5,
+    conversions: 12
+  },
+
+  "ad_002": {
+    impressions: 8000,
+    reach: 6000,
+    clicks: 180,
+    spend: 20.10,
+    cpc: 0.11,
+    ctr: 2.2,
+    conversions: 6
+  },
+
+  "ad_003": {
+    impressions: 5000,
+    reach: 4000,
+    clicks: 140,
+    spend: 18.60,
+    cpc: 0.13,
+    ctr: 2.8,
+    conversions: 3
+  },
+
+  "ad_004": {
+    impressions: 15000,
+    reach: 11000,
+    clicks: 600,
+    spend: 65.00,
+    cpc: 0.10,
+    ctr: 4.0,
+    conversions: 22
+  }
+};
+
+
+
+
+
+
+
+
+
+
+// =======================================================================================================
+
+
+
+router.get("/meta-campaigns/:clientId/", async (req, res) => {
+
+    console.log("meta-campaigns reached");
+  try {
+    const { clientId} = req.params;
+
+    const adAccountId='act_445418002927999'
+
+
+
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client Not Found" });
+
+    const token = client.metaAccounts.userAccessToken;
+    if (!token) return res.status(400).json({ error: "Meta Not Connected" });
+
+    const response = await axios.get(
+      `https://graph.facebook.com/v21.0/${adAccountId}/campaigns`,
+      {
+        params: {
+          fields: "id,name,status,objective,effective_status",
+          access_token: token,
+        },
+      }
+    );
+
+    const campaigns= response.data.data?.length ? response.data.data : mockCampaigns;
+
+    console.log("campaigns", campaigns);
+
+    return res.json({ success: true, campaigns });
+
+  } catch (error) {
+    console.error("Campaign error:", error.response?.data || error.message);
+    return res.status(500).json({
+      error: "Failed to fetch campaigns",
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
+
+router.get("/meta-adsets/:clientId/:campaignId", async (req, res) => {
+  try {
+    const { clientId, campaignId } = req.params;
+
+    console.log("campaignID", campaignId)
+    console.log("clientID", clientId)
+
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client Not Found" });
+
+    const token = client.metaAccounts.userAccessToken;
+
+    // const response = await axios.get(
+    //   `https://graph.facebook.com/v21.0/${campaignId}/adsets`,
+    //   {
+    //     params: {
+    //       fields: "id,name,status,daily_budget,start_time,effective_status",
+    //       access_token: token,
+    //     },
+    //   }
+    // );
+
+    const adSets = mockAdSets[campaignId] || [];
+
+    console.log("adsets", adSets);
+
+    return res.json({
+      success: true,
+      adSets,
+    });
+
+  } catch (error) {
+    console.log("Adset error:", error.response?.data || error.message);
+  }
+});
+
+
+
+router.get("/meta-ads/:clientId/:adSetId", async (req, res) => {
+  try {
+    const { clientId, adSetId } = req.params;
+
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client Not Found" });
+
+    const token = client.metaAccounts.userAccessToken;
+
+    // const response = await axios.get(
+    //   `https://graph.facebook.com/v21.0/${adSetId}/ads`,
+    //   {
+    //     params: {
+    //       fields: "id,name,status,creative,configured_status,effective_status",
+    //       access_token: token,
+    //     },
+    //   }
+    // );
+
+    const ads = mockAds[adSetId] || [];
+
+    console.log("ads", ads)
+
+    return res.json({
+      success: true,
+      ads,
+    });
+
+  } catch (error) {
+    console.log("Ads error:", error.response?.data || error.message);
+
+    // Fake fallback
+    return res.json({
+      success: true,
+      ads: [
+        {
+          id: "fake_ad_1",
+          name: "Test Ad (Fallback)",
+          status: "PAUSED",
+          creative: {
+            thumbnail_url: "https://via.placeholder.com/200"
+          }
+        }
+      ],
+    });
+  }
+});
+
+
+
+
+router.get("/meta-ad-insights/:clientId/:adId", async (req, res) => {
+  try {
+    const { clientId, adId } = req.params;
+
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client Not Found" });
+
+    const token = client.metaAccounts.userAccessToken;
+
+    // const response = await axios.get(
+    //   `https://graph.facebook.com/v21.0/${adId}/insights`,
+    //   {
+    //     params: {
+    //       fields: "impressions,reach,clicks,spend,cpc,ctr,actions",
+    //       access_token: token,
+    //     },
+    //   }
+    // );
+
+    const insights= mockAdInsights[adId] || [];
+
+    console.log("Insights", insights)
+
+    return res.json({
+      success: true,
+      insights: insights
+    });
+
+  } catch (error) {
+    console.log("Insights error:", error.response?.data || error.message);
+
+    // return res.json({
+    //   success: true,
+    //   insights: {
+    //     impressions: 12000,
+    //     reach: 9000,
+    //     clicks: 420,
+    //     spend: 45.20,
+    //     cpc: 0.11,
+    //     ctr: 3.5,
+    //     actions: [{ action_type: "link_click", value: 420 }]
+    //   }
+    // });
+  }
+});
+
+
+
+
+
+
+
+
+
 
 
 
